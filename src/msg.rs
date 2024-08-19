@@ -11,8 +11,7 @@ pub enum ExecuteMsg {
     Bet {
         guess: u32,
         odds: u32,
-    },
-    Junk {},
+    }
 }
 
 

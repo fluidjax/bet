@@ -50,7 +50,6 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Bet{ guess , odds} => execute::bet(deps, info, env, guess, odds),
-        ExecuteMsg::Junk{} => execute::junk(),
     }
 }
 
@@ -76,67 +75,61 @@ pub mod execute {
     use crate::state::Outcome::Win;
     use super::*;
 
-
-    pub fn junk()  -> Result<Response, ContractError> {
-        Ok(Response::new())
-    }
-
     pub fn bet(deps: DepsMut, info: MessageInfo, env: Env, guess: u32, odds: u32)  -> Result<Response, ContractError> {
-        // //get_random is calls different function depending on whether we are in test.debug mode
-        // //or running from a chain
-        // let array = get_random(env.clone());
-        // let res = int_in_range(array, 1, odds);
-        //
-        // let won = guess == res;
-        // let bet_amount = Uint128::from(100u128);
-        // let sender = info.sender.clone().into_string().clone();
-        // let address = info.sender.clone();
-        // let prize = calculate_prize(&info, odds, won);
-        // if won {
-        //     let prize = Coin {
-        //                  denom: "urock".to_string(),
-        //                  amount: prize,
-        //              };
-        //              let _send = BankMsg::Send {
-        //                  to_address: sender.clone(),
-        //                  amount: vec![prize],
-        //              };
-        // }
-        // let bet_index = BETINDEX.may_load(deps.storage, address)?;
-        // let next_index :u32;
-        // match bet_index {
-        //     Some(bet_index) => {
-        //         next_index = bet_index + 1;
-        //     }
-        //     None => {
-        //         next_index = 1;
-        //     }
-        // }
-        // let _ = BETINDEX.save(deps.storage,info.sender.clone(), &next_index);
-        //
-        //
-        // let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
-        //
-        // let bi = BetItem {
-        //     block: env.block.time.clone(),
-        //     odds: odds,
-        //     guess: guess,
-        //     result: res,
-        //     prize: prize.into(),
-        //     bet: bet_amount,
-        //     outcome: if won { Win } else { Lose },
-        // };
-        //
-        // let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
-        //
-        //
-        // Ok(Response::new()
-        //    .add_attribute("action", if won { "win" } else { "lose" })
-        //    .add_attribute("guess", guess.to_string())
-        //    .add_attribute("key", betlistkey)
-        //
-        // )
-        Ok(Response::new())
+        //get_random is calls different function depending on whether we are in test.debug mode
+        //or running from a chain
+        let array = get_random(env.clone());
+        let res = int_in_range(array, 1, odds);
+
+        let won = guess == res;
+        let bet_amount = Uint128::from(100u128);
+        let sender = info.sender.clone().into_string().clone();
+        let address = info.sender.clone();
+        let prize = calculate_prize(&info, odds, won);
+        if won {
+            let prize = Coin {
+                         denom: "urock".to_string(),
+                         amount: prize,
+                     };
+                     let _send = BankMsg::Send {
+                         to_address: sender.clone(),
+                         amount: vec![prize],
+                     };
+        }
+        let bet_index = BETINDEX.may_load(deps.storage, address)?;
+        let next_index :u32;
+        match bet_index {
+            Some(bet_index) => {
+                next_index = bet_index + 1;
+            }
+            None => {
+                next_index = 1;
+            }
+        }
+        let _ = BETINDEX.save(deps.storage,info.sender.clone(), &next_index);
+
+
+        let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
+
+        let bi = BetItem {
+            block: env.block.time.clone(),
+            odds: odds,
+            guess: guess,
+            result: res,
+            prize: prize.into(),
+            bet: bet_amount,
+            outcome: if won { Win } else { Lose },
+        };
+
+        let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
+
+
+        Ok(Response::new()
+           .add_attribute("action", if won { "win" } else { "lose" })
+           .add_attribute("guess", guess.to_string())
+           .add_attribute("key", betlistkey)
+
+        )
     }
 
 
