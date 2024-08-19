@@ -14,6 +14,7 @@ use nois::{int_in_range};
 use cosmwasm_std::Uint128;
 
 
+
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:bet";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -26,6 +27,7 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    //Instantiate the contract, setup an admin address (currently unused)
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     let admin = msg.admin.unwrap_or_else(|| info.sender.to_string());
 
@@ -71,6 +73,10 @@ fn query_bet_at(deps: Deps, _env: Env, address: String, index: u32) -> StdResult
 
 
 pub mod execute {
+    use cosmwasm_std::BankQuery;
+    use cosmwasm_std::QueryRequest;
+    use cosmwasm_std::BalanceResponse;
+    use cosmwasm_std::CosmosMsg;
     use crate::state::Outcome::Lose;
     use crate::state::Outcome::Win;
     use super::*;
@@ -82,20 +88,11 @@ pub mod execute {
         let res = int_in_range(array, 1, odds);
 
         let won = guess == res;
-        let bet_amount = Uint128::from(100u128);
-        let sender = info.sender.clone().into_string().clone();
+
         let address = info.sender.clone();
-        let prize = calculate_prize(&info, odds, won);
-        if won {
-            let prize = Coin {
-                         denom: "urock".to_string(),
-                         amount: prize,
-                     };
-                     let _send = BankMsg::Send {
-                         to_address: sender.clone(),
-                         amount: vec![prize],
-                     };
-        }
+        let (bet_amount,prize) = calculate_prize(&info, odds, won);
+        let mut send_msg: Option<BankMsg> = None;
+
         let bet_index = BETINDEX.may_load(deps.storage, address)?;
         let next_index :u32;
         match bet_index {
@@ -107,9 +104,14 @@ pub mod execute {
             }
         }
         let _ = BETINDEX.save(deps.storage,info.sender.clone(), &next_index);
-
-
+        let sender = info.sender.clone().into_string().clone();
         let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
+
+
+        let contract_address = env.contract.address;
+        let bb = query_native_balance(deps.as_ref(), "urock".to_string(), contract_address);
+        let value = bb.unwrap();
+        let bank_balance: Uint128 = Uint128::from(value);
 
         let bi = BetItem {
             block: env.block.time.clone(),
@@ -119,21 +121,57 @@ pub mod execute {
             prize: prize.into(),
             bet: bet_amount,
             outcome: if won { Win } else { Lose },
+            bank_balance: bank_balance,
         };
 
         let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
 
+        if won {
+                let prize = Coin {
+                    denom: "urock".to_string(),
+                    amount: prize,
+                };
+                let send_msg = BankMsg::Send {
+                    to_address: info.sender.to_string(),
+                    amount: vec![prize],
+                };
 
-        Ok(Response::new()
-           .add_attribute("action", if won { "win" } else { "lose" })
-           .add_attribute("guess", guess.to_string())
-           .add_attribute("key", betlistkey)
-
-        )
+            Ok(Response::new()
+                .add_message(CosmosMsg::Bank(send_msg))
+               .add_attribute("action", if won { "win" } else { "lose" })
+               .add_attribute("guess", guess.to_string())
+               .add_attribute("key", betlistkey)
+            )
+        }else{
+            Ok(Response::new()
+                .add_attribute("action", if won { "win" } else { "lose" })
+                .add_attribute("guess", guess.to_string())
+                .add_attribute("key", betlistkey)
+            )
+        }
     }
 
 
-    #[cfg(not(test))]
+    fn query_native_balance(
+        deps: Deps,
+        denom: String,
+        contract_address: Addr,
+    ) -> StdResult<Uint128> {
+        let balance: BalanceResponse = deps.querier.query(&QueryRequest::Bank(BankQuery::Balance {
+            address: contract_address.to_string(),
+            denom: denom.clone(),
+        }))?;
+
+        Ok(balance.amount.amount)
+    }
+
+    fn query_contract_balance(deps: Deps, env: Env) ->Uint128 {
+        return Uint128::from(0u128)
+    }
+
+
+
+        #[cfg(not(test))]
     fn get_random(env: Env)  ->[u8; 32] {
         let nsecs = env.block.time.subsec_nanos();
         let mut hasher = Sha256::new();
@@ -163,10 +201,7 @@ pub mod execute {
 
 
 
-    fn calculate_prize(info: &MessageInfo, odds: u32, won: bool) -> Uint128 {
-        if won == false {
-            return Uint128::from(0u128);
-        }
+    fn calculate_prize(info: &MessageInfo, odds: u32, won: bool) -> (Uint128,Uint128)  {
         let sent_tokens_denom = "urock";  // replace with your token's denom
         let mut sent_tokens = Uint128::from(0u128);
         for coin in &info.funds {
@@ -175,9 +210,15 @@ pub mod execute {
                 break;
             }
         }
-        let prize = Uint128::from(odds) * sent_tokens;
-        prize
+        let mut prize= Uint128::from(0u128);
+        if won == true {
+             prize = Uint128::from(odds) * sent_tokens;
+        }
+        (sent_tokens, prize)
     }
+
+
+
 }
 
 

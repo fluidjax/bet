@@ -33,6 +33,7 @@ pub struct BetItem {
     pub prize: u128,
     pub bet: Uint128,
     pub outcome: Outcome,
+    pub bank_balance: Uint128,
 }
 
 
@@ -40,8 +41,8 @@ pub struct BetItem {
 impl fmt::Display for BetItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-               "Block: {}, Odds: {}, Guess: {}, Result: {}, Prize: {}, Bet: {}, Outcome {}",
-               self.block, self.odds, self.guess, self.result, self.prize, self.bet.u128(), self.outcome
+               "Block: {}, Odds: {}, Guess: {}, Result: {}, Prize: {}, Bet: {}, Outcome {}, Initial_Bank_Balance {}",
+               self.block, self.odds, self.guess, self.result, self.prize, self.bet.u128(), self.outcome, self.bank_balance.u128()
         )
     }
 }

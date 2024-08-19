@@ -22,7 +22,7 @@ zenrockd query wasm list-contract-by-code 1 $NODE --output json
 
 
 #Execute a Bet operation once
-zenrockd tx wasm execute zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s38wvxu '{"bet":{"guess":1,"to":"zen13y3tm68gmu9kntcxwvmue82p6akacnpt2v7nty","odds":5}}' --from alice $TXFLAG -y
+zenrockd tx wasm execute zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s38wvxu '{"bet":{"guess":2,"to":"zen13y3tm68gmu9kntcxwvmue82p6akacnpt2v7nty","odds":2}}' --from alice --amount=100urock  $TXFLAG -y
 #View the result of that Bet increment index each time you make a bet
 zenrockd query wasm contract-state smart zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s38wvxu '{"bet_at":{"address":"zen13y3tm68gmu9kntcxwvmue82p6akacnpt2v7nty","index":1}}' --output json
 
@@ -31,4 +31,10 @@ zenrockd query wasm contract-state smart zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrv
 #Execute a Bet operation 10 times & veiw the results
 for i in {1..10}; do zenrockd tx wasm execute zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s38wvxu '{"bet":{"guess":1,"to":"zen13y3tm68gmu9kntcxwvmue82p6akacnpt2v7nty","odds":5}}' --from alice $TXFLAG -y; sleep 1;done
 for i in {1..10}; do zenrockd query wasm contract-state smart zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s38wvxu "{\"bet_at\":{\"address\":\"zen13y3tm68gmu9kntcxwvmue82p6akacnpt2v7nty\",\"index\":$i}}" --output json; done
+
+
+#Get Balance
+zenrockd query bank balance $ALICE urock
+zenrockd query bank balance zen14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s38wvxu urock
+
 
