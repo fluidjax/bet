@@ -1,6 +1,4 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use crate::state::BetItem;
 
 #[cw_serde]
@@ -11,7 +9,8 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum ExecuteMsg {
     Bet {
-        guess: i32
+        guess: u32,
+        odds: u32,
     }
 }
 
@@ -21,7 +20,7 @@ pub enum ExecuteMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     #[returns(BetAtResponse)]
-    BetAt {index: i32},
+    BetAt {index: u32},
 }
 
 
