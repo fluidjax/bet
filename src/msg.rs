@@ -20,7 +20,7 @@ pub enum ExecuteMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     #[returns(BetAtResponse)]
-    BetAt {index: u32},
+    BetAt {address: String, index: u32},
 }
 
 
