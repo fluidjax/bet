@@ -1,7 +1,6 @@
-use std::process::Output;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, to_binary};
+use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, to_json_binary};
 use cosmwasm_std::{Coin, BankMsg};
 use cw2::set_contract_version;
 use sha2::{Sha256, Digest};
@@ -51,6 +50,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Bet{ guess , odds} => execute::bet(deps, info, env, guess, odds),
+        ExecuteMsg::Junk{} => execute::junk(),
     }
 }
 
@@ -65,35 +65,10 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 fn query_bet_at(deps: Deps, _env: Env, address: String, index: u32) -> StdResult<Binary> {
     let betlistkey = format!("{}.{}", address, index);
     let b = BETLIST.may_load(deps.storage,&betlistkey)?;
-    to_binary(&BetAtResponse{bet_item:b.expect("REASON")})
-}
-
-#[cfg(not(test))]
-pub fn get_random(env: Env)  ->[u8; 32] {
-    let nsecs = env.block.time.subsec_nanos();
-    let mut hasher = Sha256::new();
-    hasher.update(nsecs.to_string());
-    let result = hasher.finalize();
-    let hex_string = hex::encode(result);
-    let vec_u8 = hex::decode(hex_string).expect("Decoding failed");
-    let array: [u8; 32] = vec_u8.try_into().expect("Expected length 32");
-    array
+    to_json_binary(&BetAtResponse{bet_item:b.expect("REASON")})
 }
 
 
-#[cfg(test)]
-pub fn get_random(env: Env) ->[u8; 32] {
-    use rand::{Rng};
-    let mut hasher;
-    hasher = Sha256::new();
-    rndString := 
-    hasher.update(rand::thread_rng().gen().to_string());
-    let result = hasher.finalize();
-    let hex_string = hex::encode(result);
-    let vec_u8 = hex::decode(hex_string).expect("Decoding failed");
-    let array: [u8; 32] = vec_u8.try_into().expect("Expected length 32");
-    array
-}
 
 
 pub mod execute {
@@ -101,70 +76,96 @@ pub mod execute {
     use crate::state::Outcome::Win;
     use super::*;
 
+
+    pub fn junk()  -> Result<Response, ContractError> {
+        Ok(Response::new())
+    }
+
     pub fn bet(deps: DepsMut, info: MessageInfo, env: Env, guess: u32, odds: u32)  -> Result<Response, ContractError> {
+        // //get_random is calls different function depending on whether we are in test.debug mode
+        // //or running from a chain
+        // let array = get_random(env.clone());
+        // let res = int_in_range(array, 1, odds);
+        //
+        // let won = guess == res;
+        // let bet_amount = Uint128::from(100u128);
+        // let sender = info.sender.clone().into_string().clone();
+        // let address = info.sender.clone();
+        // let prize = calculate_prize(&info, odds, won);
+        // if won {
+        //     let prize = Coin {
+        //                  denom: "urock".to_string(),
+        //                  amount: prize,
+        //              };
+        //              let _send = BankMsg::Send {
+        //                  to_address: sender.clone(),
+        //                  amount: vec![prize],
+        //              };
+        // }
+        // let bet_index = BETINDEX.may_load(deps.storage, address)?;
+        // let next_index :u32;
+        // match bet_index {
+        //     Some(bet_index) => {
+        //         next_index = bet_index + 1;
+        //     }
+        //     None => {
+        //         next_index = 1;
+        //     }
+        // }
+        // let _ = BETINDEX.save(deps.storage,info.sender.clone(), &next_index);
+        //
+        //
+        // let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
+        //
+        // let bi = BetItem {
+        //     block: env.block.time.clone(),
+        //     odds: odds,
+        //     guess: guess,
+        //     result: res,
+        //     prize: prize.into(),
+        //     bet: bet_amount,
+        //     outcome: if won { Win } else { Lose },
+        // };
+        //
+        // let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
+        //
+        //
+        // Ok(Response::new()
+        //    .add_attribute("action", if won { "win" } else { "lose" })
+        //    .add_attribute("guess", guess.to_string())
+        //    .add_attribute("key", betlistkey)
+        //
+        // )
+        Ok(Response::new())
+    }
 
 
-        let array = get_random(env);
+    #[cfg(not(test))]
+    fn get_random(env: Env)  ->[u8; 32] {
+        let nsecs = env.block.time.subsec_nanos();
+        let mut hasher = Sha256::new();
+        hasher.update(nsecs.to_string());
+        let result = hasher.finalize();
+        let hex_string = hex::encode(result);
+        let vec_u8 = hex::decode(hex_string).expect("Decoding failed");
+        let array: [u8; 32] = vec_u8.try_into().expect("Expected length 32");
+        array
+    }
 
-
-        //println!("{:?}", array);
-        let res = int_in_range(array, 1, odds);
-
-
-        let won = guess == res;
-        let bet_amount = Uint128::from(100u128);
-        let sender = info.sender.clone().into_string().clone();
-        let address = info.sender.clone();
-
-
-        let prize = calculate_prize(&info, odds, won);
-
-        if won {
-            let prize = Coin {
-                         denom: "urock".to_string(),
-                         amount: prize,
-                     };
-                     let _send = BankMsg::Send {
-                         to_address: sender.clone(),
-                         amount: vec![prize],
-                     };
-        }
-
-
-        let bet_index = BETINDEX.may_load(deps.storage, address)?;
-        let next_index :u32;
-        match bet_index {
-            Some(bet_index) => {
-                next_index = bet_index + 1;
-            }
-            None => {
-                next_index = 1;
-            }
-        }
-        let _ = BETINDEX.save(deps.storage,info.sender.clone(), &next_index);
-
-
-        let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
-
-        let bi = BetItem {
-            block: env.block.time,
-            odds: odds,
-            guess: guess,
-            result: res,
-            prize: prize.into(),
-            bet: bet_amount,
-            outcome: if won { Win } else { Lose },
-        };
-
-        let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
-
-
-        Ok(Response::new()
-           .add_attribute("action", if won { "win" } else { "lose" })
-           .add_attribute("guess", guess.to_string())
-           .add_attribute("key", betlistkey)
-
-        )
+    #[cfg(test)]
+     fn get_random(_env: Env) ->[u8; 32] {
+        use rand::{Rng};
+        let mut rng = rand::thread_rng();
+        let num: u32 = rng.gen(); // Generate a random number
+        let rnd_string = num.to_string();
+        let mut hasher;
+        hasher = Sha256::new();
+        hasher.update(rnd_string.to_string());
+        let result = hasher.finalize();
+        let hex_string = hex::encode(result);
+        let vec_u8 = hex::decode(hex_string).expect("Decoding failed");
+        let array: [u8; 32] = vec_u8.try_into().expect("Expected length 32");
+        array
     }
 
 
@@ -187,32 +188,25 @@ pub mod execute {
 }
 
 
-        #[cfg(test)]
+#[cfg(test)]
 mod tests {
-            use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-            use cosmwasm_std::{Coin, from_json};
-            use cosmwasm_std::{attr };
+            use cosmwasm_std::testing::{message_info, mock_dependencies, mock_env};
+            use cosmwasm_std::{Addr, Coin, from_json, attr};
             use crate::contract::{execute, instantiate, query};
 
             use crate::msg::{BetAtResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-            use sha2::{Sha256, Digest};
             pub const ALICE: &str ="zen13y3tm68gmu9kntcxwvmue82p6akacnpt2v7nty";
             //pub const BOB: &str ="zen126hek6zagmp3jqf97x7pq7c0j9jqs0ndxeaqhq";
 
 
-            pub fn GetRandom() -> u64 {
-                let mut hasher;
-                 hasher = Sha256::new();
-                 hasher.update(rand::thread_rng().gen().to_string());
-                return hasher
-            }
+
 
             #[test]
             fn test_instantiate() {
                 // Mock the dependencies, must be mutable so we can pass it as a mutable, empty vector means our contract has no balance
                 let mut deps = mock_dependencies();
                 let env = mock_env();
-                let info = mock_info(ALICE, &[]);
+                let info = message_info(&Addr::unchecked(ALICE), &[]);
                 let msg = InstantiateMsg { admin: None };
                 let res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
@@ -231,8 +225,7 @@ mod tests {
                     denom: "urock".into(),
                     amount: 100u128.into(),
                 }];
-
-                let info =mock_info(ALICE, &coins);
+                let info = message_info(&Addr::unchecked(ALICE), &coins);
                 let msg = InstantiateMsg { admin: None };
                 let _response = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
