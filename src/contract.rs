@@ -13,8 +13,6 @@ use crate::state::{BetItem, BETLIST, BETINDEX};
 use nois::{int_in_range};
 use cosmwasm_std::Uint128;
 
-
-
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:bet";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -30,10 +28,12 @@ pub fn instantiate(
     //Instantiate the contract, setup an admin address (currently unused)
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     let admin = msg.admin.unwrap_or_else(|| info.sender.to_string());
+    let rake_basis_points = msg.rake_basis_points;
 
     let admin_addr =Addr::unchecked(&admin);
     let config = Config {
         admin: admin_addr.clone(),
+        rake_basis_points: rake_basis_points,
     };
     CONFIG.save(deps.storage, &config)?;
 
@@ -85,6 +85,20 @@ use cosmwasm_std::BankQuery;
     pub fn bet(deps: DepsMut, info: MessageInfo, env: Env, guess: u32, odds: u32)  -> Result<Response, ContractError> {
         //get_random is calls different function depending on whether we are in test.debug mode
         //or running from a chain
+        let config = CONFIG.may_load(deps.storage)?;
+
+        let rake_basis_points: u128;
+        match config {
+            Some(config) => {
+                rake_basis_points = config.rake_basis_points
+            }
+            None => {
+                rake_basis_points = 0
+            }
+        }
+
+
+
         let array = get_random(env.clone());
         let res = int_in_range(array, 1, odds);
         let mut message = "";
@@ -92,7 +106,6 @@ use cosmwasm_std::BankQuery;
         let mut outcome = if won { Win } else { Lose };
         let address = info.sender.clone();
         let (bet_amount,prize) = calculate_prize(&info, odds, won);
-        let mut send_msg: Option<BankMsg> = None;
         let bet_index = BETINDEX.may_load(deps.storage, address)?;
         let next_index :u32;
 
@@ -109,15 +122,17 @@ use cosmwasm_std::BankQuery;
         let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
 
 
-        let (value, bank_balance) = bank_balance(&deps, &env);
+        let bank_balance = bank_balance(&deps, &env);
 
-        if value < bet_amount {
+        if bank_balance < bet_amount {
             outcome = VoidOutcome;
             message = "Insufficient bank funds";
         }
 
+        //The amount held back by the bank as a service fee
+        let rake =Uint128::from( (prize.u128() * rake_basis_points) / 10000);
 
-        let bi = BetItem {
+         let bi = BetItem {
             block: env.block.time.clone(),
             odds: odds,
             guess: guess,
@@ -125,20 +140,22 @@ use cosmwasm_std::BankQuery;
             prize: prize.into(),
             bet: bet_amount,
             outcome: outcome,
-            bank_balance: bank_balance,
+            rake: rake.u128(),
+            bank_balance_before: Uint128::from(bank_balance),
+            bank_balance_after: Uint128::from(bank_balance) - prize + rake,
             message: message.to_string(),
         };
 
         let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
 
         if won {
-                let prize = Coin {
+                let prize_coin = Coin {
                     denom: "urock".to_string(),
-                    amount: prize,
+                    amount: prize-rake,
                 };
                 let send_msg = BankMsg::Send {
                     to_address: info.sender.to_string(),
-                    amount: vec![prize],
+                    amount: vec![prize_coin],
                 };
 
             Ok(Response::new()
@@ -156,14 +173,18 @@ use cosmwasm_std::BankQuery;
         }
     }
 
-    fn bank_balance(deps: &DepsMut, env: &Env) -> (Uint128, Uint128) {
+
+    #[cfg(not(test))]
+    fn bank_balance(deps: &DepsMut, env: &Env) -> Uint128 {
         let contract_address = env.contract.address.clone();
         let bb = query_native_balance(deps.as_ref(), "urock".to_string(), contract_address);
         let value = bb.unwrap();
-        let bank_balance: Uint128 = Uint128::from(value);
-        (value, bank_balance)
+        value
     }
 
+
+
+    #[cfg(not(test))]
     fn query_native_balance(
         deps: Deps,
         denom: String,
@@ -176,14 +197,7 @@ use cosmwasm_std::BankQuery;
 
         Ok(balance.amount.amount)
     }
-
-    fn query_contract_balance(deps: Deps, env: Env) ->Uint128 {
-        return Uint128::from(0u128)
-    }
-
-
-
-        #[cfg(not(test))]
+    #[cfg(not(test))]
     fn get_random(env: Env)  ->[u8; 32] {
         let nsecs = env.block.time.subsec_nanos();
         let mut hasher = Sha256::new();
@@ -193,6 +207,12 @@ use cosmwasm_std::BankQuery;
         let vec_u8 = hex::decode(hex_string).expect("Decoding failed");
         let array: [u8; 32] = vec_u8.try_into().expect("Expected length 32");
         array
+    }
+
+
+    #[cfg(test)]
+    fn bank_balance(_deps: &DepsMut, _env: &Env) -> Uint128 {
+        Uint128::from(10000u128)
     }
 
     #[cfg(test)]
@@ -253,7 +273,7 @@ mod tests {
                 let mut deps = mock_dependencies();
                 let env = mock_env();
                 let info = message_info(&Addr::unchecked(ALICE), &[]);
-                let msg = InstantiateMsg { admin: None };
+                let msg = InstantiateMsg { admin: None, rake_basis_points: 150 };
                 let res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
                 assert_eq!(
@@ -272,7 +292,7 @@ mod tests {
                     amount: 100u128.into(),
                 }];
                 let info = message_info(&Addr::unchecked(ALICE), &coins);
-                let msg = InstantiateMsg { admin: None };
+                let msg = InstantiateMsg { admin: None, rake_basis_points: 150 };
                 let _response = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
                 for i in 1..=10 {

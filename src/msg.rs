@@ -4,6 +4,7 @@ use crate::state::BetItem;
 #[cw_serde]
 pub struct InstantiateMsg {
     pub admin: Option<String>,
+    pub rake_basis_points: u128
 }
 
 #[cw_serde]

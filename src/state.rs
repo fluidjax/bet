@@ -13,6 +13,7 @@ use cosmwasm_std::Timestamp;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     pub admin: Addr,
+    pub rake_basis_points: u128,
 }
 pub const CONFIG: Item<Config> = Item::new("config");
 
@@ -34,7 +35,9 @@ pub struct BetItem {
     pub prize: u128,
     pub bet: Uint128,
     pub outcome: Outcome,
-    pub bank_balance: Uint128,
+    pub rake: u128,
+    pub bank_balance_before: Uint128,
+    pub bank_balance_after: Uint128,
     pub message: String,
 }
 
@@ -43,8 +46,8 @@ pub struct BetItem {
 impl fmt::Display for BetItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-               "Block: {}, Odds: {}, Guess: {}, Result: {}, Prize: {}, Bet: {}, Outcome {}, Initial_Bank_Balance {}, Message {}",
-               self.block, self.odds, self.guess, self.result, self.prize, self.bet.u128(), self.outcome, self.bank_balance.u128(), self.message
+               "Block: {}, Odds: {}, Guess: {}, Result: {}, Prize: {}, Bet: {}, Outcome:{}, Rake:{}, Start_Bank_Balance:{}, End_Bank_Balance:{}, Message:'{}'",
+               self.block, self.odds, self.guess, self.result, self.prize, self.bet.u128(), self.outcome, self.rake, self.bank_balance_before.u128(),self.bank_balance_after.u128(), self.message
         )
     }
 }
