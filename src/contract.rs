@@ -109,10 +109,7 @@ use cosmwasm_std::BankQuery;
         let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
 
 
-        let contract_address = env.contract.address;
-        let bb = query_native_balance(deps.as_ref(), "urock".to_string(), contract_address);
-        let value = bb.unwrap();
-        let bank_balance: Uint128 = Uint128::from(value);
+        let (value, bank_balance) = bank_balance(&deps, &env);
 
         if value < bet_amount {
             outcome = VoidOutcome;
@@ -159,6 +156,13 @@ use cosmwasm_std::BankQuery;
         }
     }
 
+    fn bank_balance(deps: &DepsMut, env: &Env) -> (Uint128, Uint128) {
+        let contract_address = env.contract.address.clone();
+        let bb = query_native_balance(deps.as_ref(), "urock".to_string(), contract_address);
+        let value = bb.unwrap();
+        let bank_balance: Uint128 = Uint128::from(value);
+        (value, bank_balance)
+    }
 
     fn query_native_balance(
         deps: Deps,
