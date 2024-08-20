@@ -22,6 +22,7 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub enum Outcome {  // Define the Outcome enum
     Win,
     Lose,
+    VoidOutcome,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -34,6 +35,7 @@ pub struct BetItem {
     pub bet: Uint128,
     pub outcome: Outcome,
     pub bank_balance: Uint128,
+    pub message: String,
 }
 
 
@@ -41,8 +43,8 @@ pub struct BetItem {
 impl fmt::Display for BetItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-               "Block: {}, Odds: {}, Guess: {}, Result: {}, Prize: {}, Bet: {}, Outcome {}, Initial_Bank_Balance {}",
-               self.block, self.odds, self.guess, self.result, self.prize, self.bet.u128(), self.outcome, self.bank_balance.u128()
+               "Block: {}, Odds: {}, Guess: {}, Result: {}, Prize: {}, Bet: {}, Outcome {}, Initial_Bank_Balance {}, Message {}",
+               self.block, self.odds, self.guess, self.result, self.prize, self.bet.u128(), self.outcome, self.bank_balance.u128(), self.message
         )
     }
 }
@@ -52,6 +54,7 @@ impl fmt::Display for Outcome {
         match self {
             Outcome::Win => write!(f, "Win"),
             Outcome::Lose => write!(f, "Lose"),
+            Outcome::VoidOutcome => write!(f, "Void"),
         }
     }
 }

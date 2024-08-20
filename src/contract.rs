@@ -73,7 +73,8 @@ fn query_bet_at(deps: Deps, _env: Env, address: String, index: u32) -> StdResult
 
 
 pub mod execute {
-    use cosmwasm_std::BankQuery;
+    use crate::state::Outcome::VoidOutcome;
+use cosmwasm_std::BankQuery;
     use cosmwasm_std::QueryRequest;
     use cosmwasm_std::BalanceResponse;
     use cosmwasm_std::CosmosMsg;
@@ -86,15 +87,15 @@ pub mod execute {
         //or running from a chain
         let array = get_random(env.clone());
         let res = int_in_range(array, 1, odds);
-
+        let mut message = "";
         let won = guess == res;
-
+        let mut outcome = if won { Win } else { Lose };
         let address = info.sender.clone();
         let (bet_amount,prize) = calculate_prize(&info, odds, won);
         let mut send_msg: Option<BankMsg> = None;
-
         let bet_index = BETINDEX.may_load(deps.storage, address)?;
         let next_index :u32;
+
         match bet_index {
             Some(bet_index) => {
                 next_index = bet_index + 1;
@@ -113,6 +114,12 @@ pub mod execute {
         let value = bb.unwrap();
         let bank_balance: Uint128 = Uint128::from(value);
 
+        if value < bet_amount {
+            outcome = VoidOutcome;
+            message = "Insufficient bank funds";
+        }
+
+
         let bi = BetItem {
             block: env.block.time.clone(),
             odds: odds,
@@ -120,8 +127,9 @@ pub mod execute {
             result: res,
             prize: prize.into(),
             bet: bet_amount,
-            outcome: if won { Win } else { Lose },
+            outcome: outcome,
             bank_balance: bank_balance,
+            message: message.to_string(),
         };
 
         let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
