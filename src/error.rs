@@ -9,6 +9,8 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("NoSuchItem")]
+    NoSuchItem {},
 
     #[error("UninitializedValue")]
     UninitializedValue {},

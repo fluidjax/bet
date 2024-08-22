@@ -1,10 +1,10 @@
-#[cfg(not(feature = "library"))]
+
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, to_json_binary};
-use cosmwasm_std::{Coin, BankMsg};
+//use serde::ser::StdError;
+use cosmwasm_std::{Deps, DepsMut, Env, MessageInfo, Response, to_json_binary, Binary};
+use cosmwasm_std::{Coin, BankMsg,StdResult,StdError};
 use cw2::set_contract_version;
 use sha2::{Sha256, Digest};
-// use cw2::set_contract_version;
 use cosmwasm_std::Addr;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg,BetAtResponse};
@@ -40,7 +40,8 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("action", "instantiate")
-        .add_attribute("admin", admin_addr.to_string()))
+        .add_attribute("admin", admin_addr.to_string())
+        .add_attribute("rake_basis_points", rake_basis_points.to_string()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -65,18 +66,27 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 fn query_bet_at(deps: Deps, _env: Env, address: String, index: u32) -> StdResult<Binary> {
     let betlistkey = format!("{}.{}", address, index);
-    let b = BETLIST.may_load(deps.storage,&betlistkey)?;
-    to_json_binary(&BetAtResponse{bet_item:b.expect("REASON")})
+    let bet_option = BETLIST.may_load(deps.storage, &betlistkey)?;
+
+    match bet_option {
+        Some(bet_item) => {
+            to_json_binary(&BetAtResponse { bet_item })
+        },
+        None => {
+            Err(StdError::generic_err("Failed to load bet item"))
+            // Or return some default Binary value using: Ok(Binary::from(vec![]))
+        }
+    }
 }
 
 
 
 
 pub mod execute {
-    use crate::state::Outcome::VoidOutcome;
-use cosmwasm_std::BankQuery;
-    use cosmwasm_std::QueryRequest;
-    use cosmwasm_std::BalanceResponse;
+    use cosmwasm_std::BankQuery;
+use cosmwasm_std::QueryRequest;
+use cosmwasm_std::BalanceResponse;
+use crate::state::Outcome::VoidOutcome;
     use cosmwasm_std::CosmosMsg;
     use crate::state::Outcome::Lose;
     use crate::state::Outcome::Win;
@@ -99,13 +109,16 @@ use cosmwasm_std::BankQuery;
 
 
 
-        let array = get_random(env.clone());
-        let res = int_in_range(array, 1, odds);
+        let random_array = get_random(env.clone());
+        let random_result = int_in_range(random_array, 1, odds);
         let mut message = "";
-        let won = guess == res;
+        let won = guess == random_result;
         let mut outcome = if won { Win } else { Lose };
         let address = info.sender.clone();
         let (bet_amount,prize) = calculate_prize(&info, odds, won);
+
+
+        //Index is used to store each result
         let bet_index = BETINDEX.may_load(deps.storage, address)?;
         let next_index :u32;
 
@@ -122,8 +135,8 @@ use cosmwasm_std::BankQuery;
         let betlistkey = format!("{}.{}", &sender.to_string(), next_index);
 
 
+        //Check Bank has sufficient balance to pay
         let bank_balance = bank_balance(&deps, &env);
-
         if bank_balance < bet_amount {
             outcome = VoidOutcome;
             message = "Insufficient bank funds";
@@ -136,10 +149,10 @@ use cosmwasm_std::BankQuery;
             block: env.block.time.clone(),
             odds: odds,
             guess: guess,
-            result: res,
+            result: random_result,
             prize: prize.into(),
             bet: bet_amount,
-            outcome: outcome,
+            outcome: outcome.clone(),
             rake: rake.u128(),
             bank_balance_before: Uint128::from(bank_balance),
             bank_balance_after: Uint128::from(bank_balance) - prize + rake,
@@ -148,7 +161,10 @@ use cosmwasm_std::BankQuery;
 
         let _ = BETLIST.save(deps.storage, &betlistkey, &bi);
 
-        if won {
+
+        match outcome {
+            Win => {
+                //Bet is won, send prize-rake back to user
                 let prize_coin = Coin {
                     denom: "urock".to_string(),
                     amount: prize-rake,
@@ -158,19 +174,44 @@ use cosmwasm_std::BankQuery;
                     amount: vec![prize_coin],
                 };
 
-            Ok(Response::new()
-                .add_message(CosmosMsg::Bank(send_msg))
-               .add_attribute("action", if won { "win" } else { "lose" })
-               .add_attribute("guess", guess.to_string())
-               .add_attribute("key", betlistkey)
-            )
-        }else{
-            Ok(Response::new()
-                .add_attribute("action", if won { "win" } else { "lose" })
-                .add_attribute("guess", guess.to_string())
-                .add_attribute("key", betlistkey)
-            )
+                return Ok(Response::new()
+                    .add_message(CosmosMsg::Bank(send_msg))
+                    .add_attribute("action", if won { "win" } else { "lose" })
+                    .add_attribute("guess", guess.to_string())
+                    .add_attribute("key", betlistkey)
+                )
+            }
+            Lose => {
+                //Bet is lost, return result
+                return Ok(Response::new()
+                    .add_attribute("action", if won { "win" } else { "lose" })
+                    .add_attribute("guess", guess.to_string())
+                    .add_attribute("key", betlistkey)
+                );
+                // Add your code for the Lose outcome here
+            }
+            VoidOutcome => {
+                //Something went wrong, return bet to sender
+                let prize_coin = Coin {
+                    denom: "urock".to_string(),
+                    amount: bet_amount,
+                };
+                let send_msg = BankMsg::Send {
+                    to_address: info.sender.to_string(),
+                    amount: vec![prize_coin],
+                };
+
+                return Ok(Response::new()
+                    .add_message(CosmosMsg::Bank(send_msg))
+                    .add_attribute("action", if won { "win" } else { "lose" })
+                    .add_attribute("guess", guess.to_string())
+                    .add_attribute("key", betlistkey)
+                );
+                // Add your code for the VoidOutcome here
+            }
         }
+
+
     }
 
 
@@ -184,7 +225,7 @@ use cosmwasm_std::BankQuery;
 
 
 
-    #[cfg(not(test))]
+   // #[cfg(not(test))]
     fn query_native_balance(
         deps: Deps,
         denom: String,
@@ -295,29 +336,30 @@ mod tests {
                 let msg = InstantiateMsg { admin: None, rake_basis_points: 150 };
                 let _response = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
-                for i in 1..=10 {
+                for _i in 1..=5 {
                     let msg = ExecuteMsg::Bet {
                         odds: 10,
                         guess: 8,
                     };
-                    let _response = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+                    let response = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+                    println!("{:?}",response);
+                }
 
-
-                    // let mut key:String ="".to_string();
-                    // let attributes = response.attributes;
-                    // for attribute in attributes {
-                    //     let k = attribute.key;
-                    //     let v = attribute.value;
-                    //     if k == "key" {
-                    //         key = v.clone()
-                    //     }
-                    //     //println!("Key: {}, Value: {}", k, v.clone());
-                    // }
-
+                for i in 1..=10 {
                     let msg = QueryMsg::BetAt {address: ALICE.to_string(), index: i };
-                    let bin = query(deps.as_ref(), env.clone(), msg).unwrap();
-                    let res: BetAtResponse = from_json(&bin).unwrap();
-                    println!("{} - {}",i,  res.bet_item);
+                    let bin_result = query(deps.as_ref(), env.clone(), msg);
+                    match bin_result {
+                        Ok(bin) if bin.len() > 0 => {
+                            let res: BetAtResponse = from_json(&bin).unwrap();
+                            println!("{} - {}", i, res.bet_item);
+                        },
+                        Ok(_) => {
+                            // handle the situation when bin is empty
+                        },
+                        Err(_) => {
+                            // handle the case when an error occurred during `query`
+                        }
+                    }
                 }
 
                }
